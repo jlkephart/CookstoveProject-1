@@ -20,14 +20,6 @@ shinyServer(function(input, output){
     
 output$plot1<- renderPlot({   
     
-    #enter start and end date for SUMS 1A ***use "yyyy-mm-dd" format***
-    S1A_strtdat <- "2016-08-10"
-    S1A_enddat <- "2016-08-12"
-    
-    #enter start and end time for SUMS 1A ***use "HH:MM:SS" format
-    S1A_strttim <- "06:30:00"
-    S1A_endtim <- "07:15:00"
-    
     df<- filedata()
     if (is.null(df)) return(NULL) # return nothing if nothing is uploaded
     
@@ -35,21 +27,49 @@ output$plot1<- renderPlot({
     df$times = as.POSIXct(df$Time, format="%Y-%m-%d %H:%M:%S",tz="America/Lima")
     
     
-    #designate start time
-    strtim1a = as.POSIXct(paste(S1A_strtdat, S1A_strttim, sep = " "),
-                          format="%Y-%m-%d %H:%M:%S",tz="America/Lima")
+    sums1a = subset.data.frame(df, select = c(times,temp))
     
-    #designate end time
-    endtim1a = as.POSIXct(paste(S1A_enddat, S1A_endtim, sep = " "),
-                          format="%Y-%m-%d %H:%M:%S",tz="America/Lima")
     
-    sums1a = subset.data.frame(df, 
-                               df$times > strtim1a & df$times < endtim1a,
-                               select = c(times,temp))
-    
-
+    # a function that identifies the temp peaks, when the stove
+    # has been used
+    stove_uses <- function(x, t = 25, h = 1){
+        a<-x %>% mutate(peak = ifelse(temp > t, 1,0))
+        a$peak2 <- 0
+        a$peak3 <- 0
+        for (i in 1:(length(a$peak)-1)){
+            if(a$peak[i] < a$peak[i+1]){
+                a$peak2[i] = max(a$peak2) + 1
+            }else{
+                a$peak2[i] = 0
+            }
+        }
         
-        plot(sums1a$times, sums1a$temp, main = "Temperature Plot", type = "l")
+        
+        # look at established peaks one by one. See if they differ by more than
+        # h hours. If they do, the peaks are kept, if they don't, the peaks
+        # are deleted
+        for (i in 1:(max(a$peak2)-1)){
+            if (as.numeric(difftime(a$times[a$peak2 == i], a$times[a$peak2 == i+1],
+                                    units = "hours")) < -h){
+               
+                
+                 a$peak3[a$peak2 == i] = 1
+                
+            }else{
+                a$peak3[a$peak2 == i] = 0
+            }
+        }
+        # add the final peak to the dataset
+        a$peak3[a$peak2 == max(a$peak2)] = 1 
+        a
+    }
+    
+# output to plot
+    b<- stove_uses(sums1a, t = 25, h = 2)
+                               
+                               
+    plot(b$times, b$temp, type = "l", main = "Stove Temperature")
+    points(b$times, b$peak3*25, col = "red")
     
     })
     
