@@ -1,4 +1,5 @@
 library(shiny)
+library(dplyr)
 
 
 ################ This shiny App just plots whatever .csv file you give it. 
@@ -14,6 +15,48 @@ shinyServer(function(input, output){
         }
         read.csv(infile$datapath)
     })
+ 
+
+# check if the last time is within the last hour or so, if not, give a warning message.
+output$text1 <- renderText({     
+    df<- filedata()
+    if (is.null(df)) return(NULL) # return nothing if nothing is uploaded
+    df$temp= df[,2]
+    df$times = as.POSIXct(df$Time, format="%Y-%m-%d %H:%M:%S",tz="America/Lima")
+    
+
+    sums1a = subset.data.frame(df, select = c(times,temp))
+    
+    # compare the system time to the last time in the data
+    diff <- as.numeric(difftime(Sys.time(), tail(sums1a$times, 1),  units = "mins"))
+    # check for missing values
+    nas<-sum(is.na(sums1a$temp))
+    # check for extremely low values
+    min_temp <- sum(sums1a$temp< "-20", na.rm = TRUE)
+    
+    if(diff > 60 | nas>0 | min_temp>0){
+        "Error!"
+        #"Logger stopped functioning more than an hour ago"
+    #}else if (nas>0){
+        #"There are missing values in the data"
+   }
+
+})
+
+# check to see if the logger reaches a sum above 85 degrees
+output$text2 <- renderText({ 
+    df<- filedata()
+    if (is.null(df)) return(NULL) # return nothing if nothing is uploaded
+    df$temp= df[,2]
+    df$times = as.POSIXct(df$Time, format="%Y-%m-%d %H:%M:%S",tz="America/Lima")
+    sums1a = subset.data.frame(df, select = c(times,temp))
+    
+    max_temp<- sum(sums1a$temp>85, na.rm = TRUE)
+    if (max_temp > 0){
+        "The logger is too close!"
+    }
+})
+    
     
 
 ##Do the necessary data management, and plot
@@ -28,7 +71,7 @@ output$plot1<- renderPlot({
     
     
     sums1a = subset.data.frame(df, select = c(times,temp))
-    
+    sums1a <- na.omit(sums1a)
     
     # a function that identifies the temp peaks, when the stove
     # has been used
@@ -65,14 +108,16 @@ output$plot1<- renderPlot({
     }
     
 # output to plot
-    b<- stove_uses(sums1a, t = 25, h = 2)
+    b<- stove_uses(sums1a, t = 24, h = 3 )
                                
                                
     plot(b$times, b$temp, type = "l", main = "Stove Temperature")
-    points(b$times, b$peak3*25, col = "red")
+    points(b$times, b$peak3*24, col = "red")
     
     })
-    
+
+
+
 
 })
 
