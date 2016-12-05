@@ -1,5 +1,6 @@
 library(shiny)
 library(dplyr)
+library(lubridate)
 
 
 ################ This shiny App just plots whatever .csv file you give it. 
@@ -22,7 +23,9 @@ output$text1 <- renderText({
     df<- filedata()
     if (is.null(df)) return(NULL) # return nothing if nothing is uploaded
     df$temp= df[,2]
-    df$times = as.POSIXct(df$Time, format="%Y-%m-%d %H:%M:%S",tz="America/Lima")
+    
+    tformats <- c("%m/%d%y %H:%M:%S","%m/%d%y %H:%M","%Y-%m-%d %H:%M:%S") #known date formats in raw data
+    df$times = parse_date_time(df$Time, tformats, truncated = 1, tz="America/Lima")
     
 
     sums1a = subset.data.frame(df, select = c(times,temp))
@@ -30,13 +33,14 @@ output$text1 <- renderText({
     # compare the system time to the last time in the data
     diff <- as.numeric(difftime(Sys.time(), tail(sums1a$times, 1),  units = "mins"))
     # check for missing values
+    sums1a <- sums1a %>%
+        mutate(temp = ifelse(temp == "blank", "NA", temp))
     nas<-sum(is.na(sums1a$temp))
     # check for extremely low values
-    min_temp <- sum(sums1a$temp< "-20", na.rm = TRUE)
+    min_temp <- sum(sums1a$temp< -20, na.rm = TRUE)
     
     if(diff > 60 | nas>0 | min_temp>0){
-        "Error!"
-        #"Logger stopped functioning more than an hour ago"
+        "Error! Logger stopped functioning more than an hour ago"
     #}else if (nas>0){
         #"There are missing values in the data"
    }
@@ -48,10 +52,11 @@ output$text2 <- renderText({
     df<- filedata()
     if (is.null(df)) return(NULL) # return nothing if nothing is uploaded
     df$temp= df[,2]
-    df$times = as.POSIXct(df$Time, format="%Y-%m-%d %H:%M:%S",tz="America/Lima")
+    tformats <- c("%m/%d%y %H:%M:%S","%m/%d%y %H:%M","%Y-%m-%d %H:%M:%S") #known date formats in raw data
+    df$times = parse_date_time(df$Time, tformats, truncated = 1, tz="America/Lima")
     sums1a = subset.data.frame(df, select = c(times,temp))
     
-    max_temp<- sum(sums1a$temp>85, na.rm = TRUE)
+    max_temp<- sum(as.numeric(sums1a$temp)>85, na.rm = TRUE)
     if (max_temp > 0){
         "The logger is too close!"
     }
@@ -67,7 +72,8 @@ output$plot1<- renderPlot({
     if (is.null(df)) return(NULL) # return nothing if nothing is uploaded
     
     df$temp= df[,2]
-    df$times = as.POSIXct(df$Time, format="%Y-%m-%d %H:%M:%S",tz="America/Lima")
+    tformats <- c("%m/%d%y %H:%M:%S","%m/%d%y %H:%M","%Y-%m-%d %H:%M:%S") #known date formats in raw data
+    df$times = parse_date_time(df$Time, tformats, truncated = 1, tz="America/Lima")
     
     
     sums1a = subset.data.frame(df, select = c(times,temp))
@@ -76,7 +82,7 @@ output$plot1<- renderPlot({
     # a function that identifies the temp peaks, when the stove
     # has been used
     stove_uses <- function(x, t = 25, h = 1){
-        a<-x %>% mutate(peak = ifelse(temp > t, 1,0))
+        a<-x %>% mutate(peak = ifelse(as.numeric(temp) > t, 1,0))
         a$peak2 <- 0
         a$peak3 <- 0
         for (i in 1:(length(a$peak)-1)){
@@ -102,7 +108,7 @@ output$plot1<- renderPlot({
                 a$peak3[a$peak2 == i] = 0
             }
         }
-        # add the final peak to the dataset
+    # add the final peak to the dataset
         a$peak3[a$peak2 == max(a$peak2)] = 1 
         a
     }
@@ -116,8 +122,8 @@ output$plot1<- renderPlot({
     
     })
 
-
-
-
 })
+
+
+
 
